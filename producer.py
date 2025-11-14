@@ -11,7 +11,7 @@ class Producer:
 
         self.producer = KafkaProducer(
             bootstrap_servers=[f"{host}:{port}"],
-            value_serializer=lambda v: json.dumps(v).encode('utf-8')
+            value_serializer=lambda v: v
         )
 
     def generate_data(self):
@@ -31,12 +31,26 @@ class Producer:
         idx = int(np.clip(round(idx), 0, len(directions) - 1))
         direction = directions[idx]
 
-        return float(temp), humidity, direction
+        return float(temp), humidity, direction, idx
+
+    def encode_to_bytes(self, temp, hum, dir_idx):
+        # Byte 1
+        temp_byte = int((temp / 110.0) * 255) & 0xFF
+
+        # Byte 2 
+        hum_byte = int((hum / 100.0) * 255) & 0xFF
+
+        # Byte 3
+        dir_byte = dir_idx & 0xFF
+
+        return bytes([temp_byte, hum_byte, dir_byte])
 
     def send_data(self):
-        temp, humd, direc = self.generate_data()
+        temp, humd, direc, dir_idx = self.generate_data()
 
-        self.producer.send(self.topic, {'message': f'\nTemperature: {temp}, Humidity: {humd}%, Direction: {direc}'})
+        payload = self.encode_to_bytes(temp, humd, dir_idx)
+
+        self.producer.send(self.topic, payload)
         print(f'\nTemperature: {temp}, Humidity: {humd}%, Direction: {direc}')
         self.producer.flush()
 
